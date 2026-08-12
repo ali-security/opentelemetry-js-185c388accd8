@@ -1,10 +1,6 @@
 name: Unit Tests
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-  merge_group:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -20,9 +16,11 @@ jobs:
           - "20.6.0"
           - "20"
           - "22"
+          - "23"
           - "24"
           - "25"
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -43,15 +41,6 @@ jobs:
           matrix.node_version == '18' ||
           matrix.node_version == '20.6.0'
           }}
-      # Workaround: skip this install of npm@latest for Node.js v22 to
-      # workaround https://github.com/nodejs/node/issues/62425
-      # Npm@latest isn't typically *required*.
-      - run: npm install -g npm@latest
-        if: ${{
-          matrix.node_version == '20' ||
-          matrix.node_version == '24' ||
-          matrix.node_version == '25'
-          }}
 
       - name: Bootstrap
         run: npm ci --ignore-scripts
@@ -61,14 +50,23 @@ jobs:
 
       - run: npm test
 
-      - name: Report Coverage
-        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      - name: Pack @opentelemetry/core
+        if: ${{ matrix.node_version == '22' }}
+        run: |
+          mkdir -p ./seal-dist
+          npm pack --workspace=packages/opentelemetry-core --pack-destination=./seal-dist
+          mv ./seal-dist/opentelemetry-core-*.tgz ./seal-dist/core-2.7.0.tgz
+
+      - name: Upload @opentelemetry/core tarball
+        if: ${{ matrix.node_version == '22' }}
+        uses: actions/upload-artifact@v4
         with:
-          verbose: true
+          name: opentelemetry-core-tgz
+          path: ./seal-dist/core-2.7.0.tgz
+          if-no-files-found: error
   node-windows-tests:
     runs-on: windows-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -79,8 +77,6 @@ jobs:
           cache-dependency-path: |
             package-lock.json
           node-version: "22.22.1" # pin to avoid bug in 22.22.2
-
-      - run: npm install -g npm@latest
 
       - name: Bootstrap
         run: npm ci --ignore-scripts
@@ -94,6 +90,7 @@ jobs:
         run: npm run test
   browser-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -113,14 +110,9 @@ jobs:
 
       - name: Unit tests
         run: npm run test:browser
-      - name: Report Coverage
-        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-        with:
-          verbose: true
   webworker-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -139,9 +131,3 @@ jobs:
 
       - name: Unit tests
         run: npm run test:webworker
-      - name: Report Coverage
-        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-        with:
-          verbose: true
